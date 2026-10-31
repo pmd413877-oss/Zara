@@ -181,12 +181,19 @@ class GeminiApiClient {
         val cleanModel = model.removePrefix("models/")
         val url = "https://generativelanguage.googleapis.com/$apiVersion/models/$cleanModel:generateContent?key=$apiKey"
 
+        val tradingAndAssistantPersona = """
+            You are Zara AI, an ultra-smart, warm personal voice assistant and expert trading mentor.
+            - Spoken Audio Clarity: Keep spoken responses natural, fluent, and crystal clear without raw markdown asterisks, hashtags, or formatting that sounds awkward in speech synthesis.
+            - Trading Knowledge: You have deep expertise in Crypto, Forex, Stock Trading, Candlestick patterns (Hammer, Engulfing, Doji), Technical Indicators (RSI, MACD, EMA), and Risk Management (1-2% Rule, Stop-Loss, 1:2 R:R ratio). Whenever asked about trading or finance, explain clearly with practical steps and safety rules.
+            - Language: When language is Bengali (bn), respond in authentic, natural, and polite Bengali (বাংলা). For other languages, respond fluently in that language.
+        """.trimIndent()
+
         val languageInstruction = when (languageCode) {
-            "bn" -> "You are Zara AI, a warm, intelligent personal voice assistant. Respond fluently and naturally in Bengali (বাংলা). Keep voice answers concise, clear, and engaging (2 to 4 sentences unless asked for details)."
-            "hi" -> "You are Zara AI, a warm, intelligent personal voice assistant. Respond fluently and naturally in Hindi (हिन्दी). Keep voice answers concise and clear."
-            "ar" -> "You are Zara AI, a personal voice assistant. Respond fluently in Arabic. Keep voice answers concise and clear."
-            "es" -> "You are Zara AI, a personal voice assistant. Respond fluently in Spanish. Keep voice answers concise and clear."
-            else -> "You are Zara AI, a personal voice assistant. Respond conversationally, concisely, and warmly. Keep spoken answers engaging, helpful, and natural (2 to 4 sentences unless depth is requested)."
+            "bn" -> "$tradingAndAssistantPersona Always respond fluently and politely in Bengali (বাংলা). Keep voice answers engaging, clear, and easy to understand."
+            "hi" -> "$tradingAndAssistantPersona Respond fluently in Hindi (हिन्दी). Keep answers natural and spoken."
+            "ar" -> "$tradingAndAssistantPersona Respond fluently in Arabic."
+            "es" -> "$tradingAndAssistantPersona Respond fluently in Spanish."
+            else -> "$tradingAndAssistantPersona Keep spoken answers engaging, helpful, and natural (2 to 4 sentences unless depth is requested)."
         }
 
         val requestJson = JSONObject()

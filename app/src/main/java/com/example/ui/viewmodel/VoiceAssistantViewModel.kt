@@ -21,6 +21,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.example.domain.action.DeviceActionHelper
+import com.example.domain.action.DeviceActionResult
+import kotlinx.coroutines.delay
+
 sealed interface ConnectionTestStatus {
     data object Idle : ConnectionTestStatus
     data object Testing : ConnectionTestStatus
@@ -36,13 +40,16 @@ data class AssistantUiState(
     val isApiKeyConfigured: Boolean = false,
     val preferredLanguage: String = "en",
     val speechRate: Float = 1.0f,
+    val voicePitch: Float = 1.05f,
+    val continuousConversation: Boolean = true,
     val selectedVoiceName: String = "",
     val autoSpeak: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val isMicPermissionGranted: Boolean = false,
     val isSpeechAvailable: Boolean = true,
     val connectionTestStatus: ConnectionTestStatus = ConnectionTestStatus.Idle,
-    val availableVoices: List<DeviceVoice> = emptyList()
+    val availableVoices: List<DeviceVoice> = emptyList(),
+    val lastDeviceAction: DeviceActionResult? = null
 )
 
 class VoiceAssistantViewModel(
@@ -53,6 +60,7 @@ class VoiceAssistantViewModel(
 
     private val geminiClient = GeminiApiClient()
     private val speechHelper = SpeechRecognizerHelper(context)
+    private val deviceActionHelper = DeviceActionHelper(context)
     private var ttsHelper: TextToSpeechHelper? = null
 
     private val _uiState = MutableStateFlow(
@@ -125,6 +133,18 @@ class VoiceAssistantViewModel(
                 _uiState.update { it.copy(autoSpeak = auto) }
             }
         }
+
+        viewModelScope.launch {
+            preferencesManager.continuousConversationFlow.collect { continuous ->
+                _uiState.update { it.copy(continuousConversation = continuous) }
+            }
+        }
+
+        viewModelScope.launch {
+            preferencesManager.voicePitchFlow.collect { pitch ->
+                _uiState.update { it.copy(voicePitch = pitch) }
+            }
+        }
     }
 
     fun getEffectiveApiKey(): String {
@@ -186,14 +206,21 @@ class VoiceAssistantViewModel(
             onFinalResult = { prompt ->
                 submitPrompt(prompt)
             },
-            onError = { error ->
-                _uiState.update {
-                    it.copy(
-                        assistantState = VoiceAssistantState.Error(
-                            errorMessage = error,
-                            canRetry = true
+            onError = { error, isTimeout ->
+                if (isTimeout && _uiState.value.continuousConversation) {
+                    // In continuous mode, silence or pause shouldn't show an intrusive red error
+                    _uiState.update {
+                        it.copy(assistantState = VoiceAssistantState.Idle)
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            assistantState = VoiceAssistantState.Error(
+                                errorMessage = error,
+                                canRetry = true
+                            )
                         )
-                    )
+                    }
                 }
             }
         )
@@ -208,14 +235,78 @@ class VoiceAssistantViewModel(
         _uiState.update { it.copy(assistantState = VoiceAssistantState.Idle) }
     }
 
+    private fun scheduleResumeListening() {
+        if (!_uiState.value.continuousConversation) return
+        viewModelScope.launch {
+            delay(500)
+            if (_uiState.value.assistantState is VoiceAssistantState.Idle) {
+                startListening()
+            }
+        }
+    }
+
     fun submitPrompt(prompt: String) {
         val trimmed = prompt.trim()
         if (trimmed.isBlank()) return
 
-        // Cancel any active speech recognition
+        // Cancel any active speech recognition and TTS
         speechHelper.stop()
         ttsHelper?.stop()
 
+        val isBengali = _uiState.value.preferredLanguage == "bn"
+
+        // 1. Check for Device Actions (Open Apps, YouTube search, Web Search, Play Store)
+        val actionResult = deviceActionHelper.processVoiceCommand(trimmed, isBengali)
+        if (actionResult != null && actionResult.isHandled) {
+            val feedback = actionResult.feedbackMessage
+            _uiState.update {
+                it.copy(
+                    currentPrompt = trimmed,
+                    currentResponse = feedback,
+                    lastDeviceAction = actionResult,
+                    assistantState = VoiceAssistantState.Speaking(
+                        userPrompt = trimmed,
+                        responseText = feedback,
+                        amplitude = 0.6f
+                    )
+                )
+            }
+
+            // Record in Room Database
+            viewModelScope.launch {
+                database.conversationDao().insert(
+                    ConversationEntity(
+                        prompt = trimmed,
+                        response = feedback,
+                        language = _uiState.value.preferredLanguage,
+                        isSpoken = true
+                    )
+                )
+            }
+
+            // Speak feedback and resume listening if continuous
+            if (_uiState.value.autoSpeak) {
+                ttsHelper?.speak(
+                    text = feedback,
+                    languageCode = _uiState.value.preferredLanguage,
+                    speechRate = _uiState.value.speechRate,
+                    pitch = _uiState.value.voicePitch,
+                    voiceName = _uiState.value.selectedVoiceName,
+                    onDone = {
+                        _uiState.update { it.copy(assistantState = VoiceAssistantState.Idle) }
+                        scheduleResumeListening()
+                    },
+                    onError = {
+                        _uiState.update { it.copy(assistantState = VoiceAssistantState.Idle) }
+                    }
+                )
+            } else {
+                _uiState.update { it.copy(assistantState = VoiceAssistantState.Idle) }
+            }
+            return
+        }
+
+        // 2. Otherwise process with Gemini AI
         val effectiveKey = getEffectiveApiKey()
         if (effectiveKey.isBlank()) {
             _uiState.update {
@@ -280,6 +371,7 @@ class VoiceAssistantViewModel(
                         text = responseText,
                         languageCode = _uiState.value.preferredLanguage,
                         speechRate = _uiState.value.speechRate,
+                        pitch = _uiState.value.voicePitch,
                         voiceName = _uiState.value.selectedVoiceName,
                         onStart = {
                             _uiState.update {
@@ -298,6 +390,7 @@ class VoiceAssistantViewModel(
                             _uiState.update {
                                 it.copy(assistantState = VoiceAssistantState.Idle)
                             }
+                            scheduleResumeListening()
                         },
                         onError = {
                             _uiState.update {
@@ -431,12 +524,30 @@ class VoiceAssistantViewModel(
         }
     }
 
+    fun setContinuousConversation(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesManager.setContinuousConversation(enabled)
+        }
+    }
+
+    fun setVoicePitch(pitch: Float) {
+        viewModelScope.launch {
+            preferencesManager.setVoicePitch(pitch)
+        }
+    }
+
     fun testVoiceSample(sample: String) {
-        val text = sample.ifBlank { "Hello! I am Zara, your personal voice assistant." }
+        val defaultSample = if (_uiState.value.preferredLanguage == "bn") {
+            "হ্যালো! আমি জারা। আপনার স্পষ্ট ও মিষ্টি কণ্ঠের পার্সোনাল ভয়েস অ্যাসিস্ট্যান্ট।"
+        } else {
+            "Hello! I am Zara, your crystal clear personal voice assistant."
+        }
+        val text = sample.ifBlank { defaultSample }
         ttsHelper?.speak(
             text = text,
             languageCode = _uiState.value.preferredLanguage,
             speechRate = _uiState.value.speechRate,
+            pitch = _uiState.value.voicePitch,
             voiceName = _uiState.value.selectedVoiceName
         )
     }

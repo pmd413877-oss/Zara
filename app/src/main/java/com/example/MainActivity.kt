@@ -278,6 +278,20 @@ fun ZaraAppNavigation(viewModel: VoiceAssistantViewModel) {
                     }
                 )
             }
+
+            // 14. Trading Mentor
+            composable(Screen.TradingMentor.route) {
+                com.example.ui.screens.TradingMentorScreen(
+                    viewModel = viewModel,
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onAskZara = { prompt ->
+                        viewModel.submitPrompt(prompt)
+                        navController.navigate(Screen.VoiceListening.route)
+                    }
+                )
+            }
         }
     }
 }

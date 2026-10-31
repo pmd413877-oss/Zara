@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.ContentCopy
@@ -39,15 +40,20 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -86,6 +92,7 @@ import com.example.ui.theme.ZaraCardBg
 import com.example.ui.theme.ZaraCardBorder
 import com.example.ui.theme.ZaraCyan
 import com.example.ui.theme.ZaraElectricPurple
+import com.example.ui.theme.ZaraGreen
 import com.example.ui.theme.ZaraPink
 import com.example.ui.theme.ZaraPurple
 import com.example.ui.theme.ZaraRed
@@ -105,14 +112,29 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     var typedQuery by remember { mutableStateOf("") }
 
-    val quickPrompts = remember {
-        listOf(
-            "Tell me a story",
-            "বাংলায় একটি কবিতা বলো",
-            "Explain quantum physics",
-            "Give me a Kotlin example",
-            "How can I improve my speech?"
-        )
+    val isBn = uiState.preferredLanguage == "bn"
+    val quickPrompts = remember(isBn) {
+        if (isBn) {
+            listOf(
+                "ট্রেডিংয়ে ১-২% রিস্ক রুল কী?",
+                "ইউটিউব ওপেন করো",
+                "RSI ইন্ডিকেটর কীভাবে কাজ করে?",
+                "ইউটিউবে সার্চ করো ক্রিপ্টো ট্রেডিং",
+                "ক্যান্ডেলস্টিক প্যাটার্ন শেখাও",
+                "গুগলে সার্চ করো বিটকয়েন",
+                "ক্যালকুলেটর ওপেন করো"
+            )
+        } else {
+            listOf(
+                "Open YouTube",
+                "What is the 1-2% risk rule in trading?",
+                "Search crypto trading on YouTube",
+                "Explain Candlestick Patterns",
+                "How does the RSI indicator work?",
+                "Open Camera",
+                "Google search Bitcoin price"
+            )
+        }
     }
 
     LazyColumn(
@@ -380,6 +402,48 @@ fun HomeScreen(
                         letterSpacing = 2.sp
                     )
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Continuous Conversation Toggle Chip
+                FilterChip(
+                    selected = uiState.continuousConversation,
+                    onClick = {
+                        viewModel.setContinuousConversation(!uiState.continuousConversation)
+                    },
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = if (uiState.continuousConversation) ZaraCyan else ZaraTextMuted
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (uiState.continuousConversation) {
+                                    if (isBn) "অনবরত কথা বলা: চালু" else "Continuous Talk: ON"
+                                } else {
+                                    if (isBn) "অনবরত কথা বলা: বন্ধ" else "Continuous Talk: OFF"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ZaraCyan.copy(alpha = 0.18f),
+                        selectedLabelColor = ZaraCyan,
+                        containerColor = ZaraSurfaceVariant,
+                        labelColor = ZaraTextMuted
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = uiState.continuousConversation,
+                        borderColor = if (uiState.continuousConversation) ZaraCyan.copy(alpha = 0.5f) else ZaraCardBorder
+                    ),
+                    shape = RoundedCornerShape(20.dp)
+                )
             }
         }
 
@@ -649,11 +713,147 @@ fun HomeScreen(
             }
         }
 
+        // 6.5. Trading Mentor Feature Banner
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = ZaraCardBg),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.5.dp,
+                    Brush.horizontalGradient(listOf(ZaraElectricPurple, ZaraCyan))
+                ),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 6.dp)
+                    .testTag("home_trading_mentor_card")
+                    .clickable { onNavigate(Screen.TradingMentor.route) }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(ZaraElectricPurple.copy(alpha = 0.5f), Color(0xFF0F172A))
+                                )
+                            )
+                            .border(1.dp, ZaraCyan.copy(alpha = 0.5f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = ZaraCyan,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isBn) "ট্রেডিং মেন্টর" else "Trading Mentor Hub",
+                                color = ZaraTextPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(ZaraCyan.copy(alpha = 0.2f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "LIVE",
+                                    color = ZaraCyan,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (isBn) "ক্যান্ডেলস্টিক, RSI, রিস্ক ক্যালকুলেটর ও কুইজ" else "Candlestick, RSI, Risk Calculator & Quizzes",
+                            color = ZaraTextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open Trading",
+                        tint = ZaraCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        // 6.6. Device Action Last Result Card
+        uiState.lastDeviceAction?.let { action ->
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = ZaraSurfaceVariant),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ZaraGreen.copy(alpha = 0.4f)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInNew,
+                            contentDescription = null,
+                            tint = ZaraGreen,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isBn) "ভয়েস অ্যাকশন সম্পন্ন:" else "Device Action Executed:",
+                                color = ZaraGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = action.feedbackMessage,
+                                color = ZaraTextPrimary,
+                                fontSize = 13.sp
+                            )
+                        }
+                        action.targetIntent?.let { intent ->
+                            IconButton(onClick = {
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Could not launch", Toast.LENGTH_SHORT).show()
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.OpenInNew,
+                                    contentDescription = "Launch",
+                                    tint = ZaraCyan
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 7. Quick Prompt Chips
         item {
             Column(modifier = Modifier.padding(top = 10.dp)) {
                 Text(
-                    text = "Quick Questions",
+                    text = if (isBn) "দ্রুত প্রশ্ন করুন (Quick Questions)" else "Quick Questions",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = ZaraTextPrimary,

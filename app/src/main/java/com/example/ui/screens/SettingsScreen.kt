@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -227,6 +228,17 @@ fun SettingsScreen(
                 accentColor = ZaraPurple,
                 testTag = "settings_voice_row",
                 onClick = { onNavigateTo(Screen.VoiceSettings.route) }
+            )
+        }
+
+        item {
+            SettingsNavigationRow(
+                title = "Trading Mentor Education",
+                subtitle = "Masterclasses, Risk Calculator & Quizzes",
+                icon = Icons.Default.TrendingUp,
+                accentColor = ZaraGreen,
+                testTag = "settings_trading_mentor_row",
+                onClick = { onNavigateTo(Screen.TradingMentor.route) }
             )
         }
 

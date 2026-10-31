@@ -76,6 +76,7 @@ class TextToSpeechHelper(
         text: String,
         languageCode: String,
         speechRate: Float = 1.0f,
+        pitch: Float = 1.05f,
         voiceName: String = "",
         onStart: () -> Unit = {},
         onDone: () -> Unit = {},
@@ -109,18 +110,43 @@ class TextToSpeechHelper(
                 tts?.setLanguage(Locale.getDefault())
             }
 
-            // Set speech rate
-            tts?.setSpeechRate(speechRate.coerceIn(0.5f, 2.0f))
+            // Set speech rate & pitch for crisp natural presence
+            tts?.setSpeechRate(speechRate.coerceIn(0.6f, 1.8f))
+            tts?.setPitch(pitch.coerceIn(0.7f, 1.5f))
 
-            // Set specific voice if available
+            // Set specific voice if available, otherwise find highest quality voice for this language
             if (voiceName.isNotBlank()) {
                 tts?.voices?.find { it.name == voiceName }?.let { voice ->
                     tts?.voice = voice
                 }
+            } else {
+                // Auto-select the clearest, highest quality voice
+                try {
+                    val matchingVoices = tts?.voices?.filter {
+                        it.locale.language == targetLocale.language
+                    }
+                    val highestQualityVoice = matchingVoices?.maxByOrNull { v ->
+                        var score = 10
+                        if (v.quality == Voice.QUALITY_VERY_HIGH) score += 30
+                        else if (v.quality == Voice.QUALITY_HIGH) score += 20
+                        if (v.latency == Voice.LATENCY_VERY_LOW || v.latency == Voice.LATENCY_LOW) score += 10
+                        score
+                    }
+                    if (highestQualityVoice != null) {
+                        tts?.voice = highestQualityVoice
+                    }
+                } catch (e: Throwable) {
+                    Log.d(TAG, "Voice quality auto-selection skipped: ${e.message}")
+                }
             }
 
-            // Clean text from markdown formatting or asterisks before speaking
+            // Clean text thoroughly from markdown formatting, asterisks, emojis for natural speech
             val cleanedText = sanitizeTextForSpeech(text)
+
+            if (cleanedText.isBlank()) {
+                onDone()
+                return
+            }
 
             isSpeaking = true
             tts?.speak(cleanedText, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
@@ -157,13 +183,16 @@ class TextToSpeechHelper(
         }
     }
 
-    private fun sanitizeTextForSpeech(text: String): String {
+    fun sanitizeTextForSpeech(text: String): String {
         return text
-            .replace(Regex("\\*\\*(.*?)\\*\\*"), "$1") // remove bold markdown
-            .replace(Regex("\\*(.*?)\\*"), "$1")     // remove italic markdown
-            .replace(Regex("`{1,3}(.*?)`{1,3}"), "$1") // remove code
-            .replace(Regex("#+\\s*"), "")             // remove headers
-            .replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1") // links
+            .replace(Regex("[\\uD83C-\\uDBFF\\uDC00-\\uDFFF]+"), "") // Strip unicode emojis
+            .replace(Regex("\\*\\*(.*?)\\*\\*"), "$1") // bold markdown
+            .replace(Regex("\\*(.*?)\\*"), "$1")     // italic markdown
+            .replace(Regex("`{1,3}[\\s\\S]*?`{1,3}"), "") // code blocks
+            .replace(Regex("#+\\s*"), "")             // markdown headers
+            .replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1") // link text
+            .replace(Regex("^[-*•]\\s+", RegexOption.MULTILINE), "") // bullet points
+            .replace(Regex("\\s+"), " ")             // duplicate spaces
             .trim()
     }
 

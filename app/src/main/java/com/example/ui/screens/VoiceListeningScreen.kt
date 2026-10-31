@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -59,27 +60,40 @@ import com.example.ui.theme.ZaraTextPrimary
 import com.example.ui.theme.ZaraTextSecondary
 import com.example.ui.viewmodel.VoiceAssistantViewModel
 
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+
 @Composable
 fun VoiceListeningScreen(
     viewModel: VoiceAssistantViewModel,
     onMinimize: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isBn = uiState.preferredLanguage == "bn"
 
     val currentStatusText = when (val state = uiState.assistantState) {
-        is VoiceAssistantState.Listening -> "Zara is listening..."
-        is VoiceAssistantState.Processing -> "Zara is thinking..."
-        is VoiceAssistantState.Speaking -> "Zara is speaking..."
-        is VoiceAssistantState.Error -> "Speech error"
-        else -> "Zara is ready"
+        is VoiceAssistantState.Listening -> if (isBn) "জারা শুনছে..." else "Zara is listening..."
+        is VoiceAssistantState.Processing -> if (isBn) "জারা ভাবছে..." else "Zara is thinking..."
+        is VoiceAssistantState.Speaking -> if (isBn) "জারা কথা বলছে..." else "Zara is speaking..."
+        is VoiceAssistantState.Error -> if (isBn) "কথা বলতে সমস্যা" else "Speech error"
+        else -> if (uiState.continuousConversation) {
+            if (isBn) "জারা শুনছে... বলুন" else "Listening... speak now"
+        } else {
+            if (isBn) "জারা প্রস্তুত" else "Zara is ready"
+        }
     }
 
     val recognizedPreview = when (val state = uiState.assistantState) {
-        is VoiceAssistantState.Listening -> state.partialText.ifBlank { "Speak now..." }
+        is VoiceAssistantState.Listening -> state.partialText.ifBlank {
+            if (isBn) "এখন কথা বলুন..." else "Speak now..."
+        }
         is VoiceAssistantState.Processing -> uiState.currentPrompt
         is VoiceAssistantState.Speaking -> uiState.currentResponse
         is VoiceAssistantState.Error -> state.errorMessage
-        else -> uiState.currentResponse.ifBlank { "Tap microphone below to talk" }
+        else -> uiState.currentResponse.ifBlank {
+            if (isBn) "নিচের মাইকে চাপ দিন বা কথা বলুন" else "Tap microphone below to talk"
+        }
     }
 
     Box(
@@ -116,6 +130,39 @@ fun VoiceListeningScreen(
                     fontStyle = FontStyle.Italic,
                     fontWeight = FontWeight.Light,
                     color = ZaraTextPrimary
+                )
+
+                // Continuous talk pill
+                FilterChip(
+                    selected = uiState.continuousConversation,
+                    onClick = {
+                        viewModel.setContinuousConversation(!uiState.continuousConversation)
+                    },
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = if (uiState.continuousConversation) ZaraCyan else ZaraTextMuted
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (uiState.continuousConversation) {
+                                    if (isBn) "অটোটক চালু" else "Auto Talk: ON"
+                                } else {
+                                    if (isBn) "অটোটক বন্ধ" else "Auto Talk: OFF"
+                                },
+                                fontSize = 11.sp
+                            )
+                        }
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ZaraCyan.copy(alpha = 0.2f),
+                        selectedLabelColor = ZaraCyan,
+                        containerColor = ZaraSurfaceVariant,
+                        labelColor = ZaraTextMuted
+                    )
                 )
 
                 IconButton(

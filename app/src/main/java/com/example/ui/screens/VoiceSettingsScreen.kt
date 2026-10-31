@@ -59,10 +59,18 @@ import com.example.ui.theme.ZaraElectricPurple
 import com.example.ui.theme.ZaraPink
 import com.example.ui.theme.ZaraPurple
 import com.example.ui.theme.ZaraSurface
+import com.example.ui.theme.ZaraSurfaceVariant
 import com.example.ui.theme.ZaraTextMuted
 import com.example.ui.theme.ZaraTextPrimary
 import com.example.ui.theme.ZaraTextSecondary
 import com.example.ui.viewmodel.VoiceAssistantViewModel
+
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 
 @Composable
 fun VoiceSettingsScreen(
@@ -73,9 +81,17 @@ fun VoiceSettingsScreen(
     var currentSpeechRate by remember(uiState.speechRate) {
         mutableFloatStateOf(uiState.speechRate)
     }
+    var currentPitch by remember(uiState.voicePitch) {
+        mutableFloatStateOf(uiState.voicePitch)
+    }
     var selectedVoice by remember(uiState.selectedVoiceName) {
         mutableStateOf(uiState.selectedVoiceName)
     }
+    var continuousTalk by remember(uiState.continuousConversation) {
+        mutableStateOf(uiState.continuousConversation)
+    }
+
+    val isBn = uiState.preferredLanguage == "bn"
 
     Column(
         modifier = Modifier
@@ -83,7 +99,7 @@ fun VoiceSettingsScreen(
             .background(ZaraBackground)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(20.dp)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
     ) {
         // Top Header
         Row(
@@ -103,141 +119,286 @@ fun VoiceSettingsScreen(
             Spacer(modifier = Modifier.width(6.dp))
             Column {
                 Text(
-                    text = "Voice & Speech Settings",
+                    text = if (isBn) "ভয়েস ও উচ্চারণ সেটিংস" else "Voice & Speech Settings",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = ZaraTextPrimary
                 )
                 Text(
-                    text = "Configure voice speed and synthesis",
+                    text = if (isBn) "ক্লিয়ার ভয়েস পিচ, স্পিড ও অনবরত কথোপকথন" else "Clear audio tuning, tone presets & continuous talk",
                     fontSize = 11.sp,
                     color = ZaraTextMuted
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Speech Rate Slider Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = ZaraSurface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, ZaraCardBorder)
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Speed,
-                            contentDescription = null,
-                            tint = ZaraCyan,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Speech Speed",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = ZaraTextPrimary
-                        )
-                    }
-
-                    Text(
-                        text = "${String.format("%.2f", currentSpeechRate)}x",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ZaraCyan
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Slider(
-                    value = currentSpeechRate,
-                    onValueChange = { currentSpeechRate = it },
-                    valueRange = 0.6f..1.8f,
-                    steps = 11,
-                    colors = SliderDefaults.colors(
-                        thumbColor = ZaraCyan,
-                        activeTrackColor = ZaraElectricPurple,
-                        inactiveTrackColor = ZaraCardBorder
-                    ),
-                    modifier = Modifier.testTag("speech_rate_slider")
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Slow (0.6x)", fontSize = 11.sp, color = ZaraTextMuted)
-                    Text("Normal (1.0x)", fontSize = 11.sp, color = ZaraTextMuted)
-                    Text("Fast (1.8x)", fontSize = 11.sp, color = ZaraTextMuted)
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Test Voice Button
-                OutlinedButton(
-                    onClick = {
-                        val sampleText = when (uiState.preferredLanguage) {
-                            "bn" -> "নমস্কার, আমি জারা। এই গতিতে কথা বলছি।"
-                            "hi" -> "नमस्ते, मैं ज़ारा हूँ। इस गति से बोल रही हूँ।"
-                            "ar" -> "مرحباً، أنا زارا، أتحدث بهذه السرعة."
-                            "es" -> "Hola, soy Zara. Hablando a esta velocidad."
-                            else -> "Hello, I am Zara. Testing my speaking speed at ${String.format("%.1f", currentSpeechRate)}x."
-                        }
-                        viewModel.setSpeechRate(currentSpeechRate)
-                        viewModel.testVoiceSample(sampleText)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                        .testTag("test_voice_sample_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ZaraPurple),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ZaraPurple.copy(alpha = 0.5f))
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Test Current Speech Rate", fontSize = 13.sp)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Device Installed Voices List
-        Text(
-            text = "Installed Device Voices",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = ZaraTextPrimary,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-        )
+        Spacer(modifier = Modifier.height(14.dp))
 
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Default option
+            // 1. Continuous Conversation Switch Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = ZaraSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ZaraCardBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(ZaraCyan.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = null,
+                                    tint = ZaraCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = if (isBn) "অনবরত ব্যাক-টু-ব্যাক কথা বলা" else "Continuous Auto-Conversation",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ZaraTextPrimary
+                                )
+                                Text(
+                                    text = if (isBn) "জারা উত্তর দেওয়ার পর স্বয়ংক্রিয়ভাবে পরবর্তী কথা শুনবে।" else "Zara keeps listening after replying without button taps.",
+                                    fontSize = 11.sp,
+                                    color = ZaraTextMuted
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = continuousTalk,
+                            onCheckedChange = { continuousTalk = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ZaraCyan,
+                                uncheckedThumbColor = ZaraTextMuted,
+                                uncheckedTrackColor = ZaraCardBorder
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 2. Clear Voice Pitch & Tone Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = ZaraSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ZaraCardBorder)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = null,
+                                    tint = ZaraCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isBn) "ভয়েস ক্লিয়ারিটি ও পিচ (Pitch)" else "Voice Clarity & Pitch",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ZaraTextPrimary
+                                )
+                            }
+                            Text(
+                                text = "${String.format("%.2f", currentPitch)}x",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ZaraCyan
+                            )
+                        }
+
+                        Slider(
+                            value = currentPitch,
+                            onValueChange = { currentPitch = it },
+                            valueRange = 0.8f..1.4f,
+                            steps = 11,
+                            colors = SliderDefaults.colors(
+                                thumbColor = ZaraCyan,
+                                activeTrackColor = ZaraCyan,
+                                inactiveTrackColor = ZaraCardBorder
+                            )
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Deep (0.8x)", fontSize = 11.sp, color = ZaraTextMuted)
+                            Text("Clear Studio (1.05x)", fontSize = 11.sp, color = ZaraCyan)
+                            Text("Bright (1.4x)", fontSize = 11.sp, color = ZaraTextMuted)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Preset Chips
+                        Text(
+                            text = if (isBn) "দ্রুত টোন প্রিসেট:" else "Voice Tone Presets:",
+                            fontSize = 12.sp,
+                            color = ZaraTextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SuggestionChip(
+                                onClick = { currentPitch = 1.08f; currentSpeechRate = 1.0f },
+                                label = { Text("Studio Crisp", fontSize = 11.sp) },
+                                colors = SuggestionChipDefaults.suggestionChipColors(containerColor = ZaraSurfaceVariant)
+                            )
+                            SuggestionChip(
+                                onClick = { currentPitch = 1.0f; currentSpeechRate = 0.95f },
+                                label = { Text("Natural Warm", fontSize = 11.sp) },
+                                colors = SuggestionChipDefaults.suggestionChipColors(containerColor = ZaraSurfaceVariant)
+                            )
+                            SuggestionChip(
+                                onClick = { currentPitch = 1.15f; currentSpeechRate = 1.1f },
+                                label = { Text("Fast & Crisp", fontSize = 11.sp) },
+                                colors = SuggestionChipDefaults.suggestionChipColors(containerColor = ZaraSurfaceVariant)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. Speech Rate Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = ZaraSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ZaraCardBorder)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = null,
+                                    tint = ZaraElectricPurple,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isBn) "কথা বলার গতি (Speed)" else "Speaking Rate",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ZaraTextPrimary
+                                )
+                            }
+
+                            Text(
+                                text = "${String.format("%.2f", currentSpeechRate)}x",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ZaraElectricPurple
+                            )
+                        }
+
+                        Slider(
+                            value = currentSpeechRate,
+                            onValueChange = { currentSpeechRate = it },
+                            valueRange = 0.6f..1.8f,
+                            steps = 11,
+                            colors = SliderDefaults.colors(
+                                thumbColor = ZaraElectricPurple,
+                                activeTrackColor = ZaraElectricPurple,
+                                inactiveTrackColor = ZaraCardBorder
+                            ),
+                            modifier = Modifier.testTag("speech_rate_slider")
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Slow (0.6x)", fontSize = 11.sp, color = ZaraTextMuted)
+                            Text("Normal (1.0x)", fontSize = 11.sp, color = ZaraTextMuted)
+                            Text("Fast (1.8x)", fontSize = 11.sp, color = ZaraTextMuted)
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Test Voice Button
+                        OutlinedButton(
+                            onClick = {
+                                val sampleText = if (isBn) {
+                                    "নমস্কার! আমি জারা। আপনার স্পষ্ট ও মধুর কন্ঠের অ্যাসিস্ট্যান্ট।"
+                                } else {
+                                    "Hello! I am Zara, testing this clear voice pitch and speed."
+                                }
+                                viewModel.setVoicePitch(currentPitch)
+                                viewModel.setSpeechRate(currentSpeechRate)
+                                viewModel.testVoiceSample(sampleText)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("test_voice_sample_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ZaraCyan),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ZaraCyan.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (isBn) "ক্লিয়ার ভয়েস টেস্ট করুন" else "Play Clear Voice Sample", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            // 4. Device Voice List
+            item {
+                Text(
+                    text = if (isBn) "ডিভাইস ভয়েস ইঞ্জিন সমূহ" else "Installed Device Voices",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ZaraTextPrimary,
+                    modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                )
+            }
+
             item {
                 VoiceItemRow(
                     name = "",
-                    displayName = "System Default Engine Voice",
-                    locale = "Automatic",
+                    displayName = if (isBn) "স্বয়ংক্রিয় হাই-কোয়ালিটি ক্লিয়ার ভয়েস (প্রস্তাবিত)" else "Auto High-Quality Crisp Voice (Recommended)",
+                    locale = "Auto",
                     isSelected = selectedVoice.isBlank(),
                     onSelect = { selectedVoice = "" }
                 )
             }
 
-            // Installed device voices
             items(uiState.availableVoices, key = { it.name }) { voice ->
                 VoiceItemRow(
                     name = voice.name,
@@ -255,19 +416,21 @@ fun VoiceSettingsScreen(
         Button(
             onClick = {
                 viewModel.setSpeechRate(currentSpeechRate)
+                viewModel.setVoicePitch(currentPitch)
                 viewModel.setSelectedVoice(selectedVoice)
+                viewModel.setContinuousConversation(continuousTalk)
                 onNavigateBack()
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
-                .testTag("save_voice_settings_button"),
-            shape = RoundedCornerShape(26.dp),
+                .height(50.dp)
+                .testTag("voice_settings_save_button"),
+            shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ZaraElectricPurple)
         ) {
-            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Save Voice Settings", fontWeight = FontWeight.Bold, color = Color.White)
+            Text(if (isBn) "সেটিংস সংরক্ষণ করুন" else "Save Settings", fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

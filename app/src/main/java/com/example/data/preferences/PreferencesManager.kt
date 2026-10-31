@@ -23,6 +23,16 @@ class PreferencesManager(private val context: Context) {
         val KEY_SELECTED_VOICE = stringPreferencesKey("selected_voice_name")
         val KEY_AUTO_SPEAK = booleanPreferencesKey("auto_speak_response")
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        val KEY_CONTINUOUS_CONVERSATION = booleanPreferencesKey("continuous_conversation")
+        val KEY_VOICE_PITCH = floatPreferencesKey("voice_pitch")
+    }
+
+    val continuousConversationFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_CONTINUOUS_CONVERSATION] ?: true
+    }
+
+    val voicePitchFlow: Flow<Float> = context.dataStore.data.map { preferences ->
+        preferences[KEY_VOICE_PITCH] ?: 1.05f
     }
 
     val apiKeyFlow: Flow<String> = context.dataStore.data.map { preferences ->
@@ -98,6 +108,18 @@ class PreferencesManager(private val context: Context) {
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { preferences ->
             preferences[KEY_THEME_MODE] = mode
+        }
+    }
+
+    suspend fun setContinuousConversation(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_CONTINUOUS_CONVERSATION] = enabled
+        }
+    }
+
+    suspend fun setVoicePitch(pitch: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_VOICE_PITCH] = pitch
         }
     }
 
