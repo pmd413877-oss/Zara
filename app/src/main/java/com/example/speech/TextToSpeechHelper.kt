@@ -100,11 +100,13 @@ class TextToSpeechHelper(
                 else -> Locale.US
             }
 
-            val result = tts?.setLanguage(targetLocale)
+            var result = tts?.setLanguage(targetLocale)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                // Try fallback to US English if locale is not supported
-                Log.w(TAG, "Locale $targetLocale not supported, falling back to English")
-                tts?.setLanguage(Locale.US)
+                result = tts?.setLanguage(Locale(targetLocale.language))
+            }
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w(TAG, "Locale $targetLocale not supported, using default locale")
+                tts?.setLanguage(Locale.getDefault())
             }
 
             // Set speech rate

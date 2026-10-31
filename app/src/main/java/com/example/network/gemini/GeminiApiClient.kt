@@ -16,16 +16,29 @@ class GeminiApiClient {
 
     companion object {
         private const val TAG = "GeminiApiClient"
-        private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-        private const val PRIMARY_MODEL = "gemini-2.5-flash"
-        private const val FALLBACK_MODEL = "gemini-1.5-flash"
+        private val FALLBACK_CANDIDATES = listOf(
+            "gemini-2.0-flash",
+            "gemini-2.5-flash",
+            "gemini-1.5-flash-latest",
+            "gemini-flash-latest",
+            "gemini-2.0-flash-lite",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash"
+        )
+        private val API_VERSIONS = listOf("v1beta", "v1")
     }
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(25, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
-        .writeTimeout(25, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(35, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
         .build()
+
+    // Cache the detected working model name and API version
+    @Volatile
+    private var cachedWorkingModel: String? = null
+    @Volatile
+    private var cachedApiVersion: String = "v1beta"
 
     suspend fun generateResponse(
         apiKey: String,
@@ -33,68 +46,141 @@ class GeminiApiClient {
         languageCode: String = "en",
         conversationHistory: List<Pair<String, String>> = emptyList()
     ): Result<String> = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) {
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank()) {
             return@withContext Result.failure(
                 IllegalArgumentException("API Key is missing. Please configure your Gemini API key in Settings.")
             )
         }
 
-        // Try primary model first, fallback to 1.5-flash if needed
-        val firstAttempt = tryModel(PRIMARY_MODEL, apiKey, prompt, languageCode, conversationHistory)
-        if (firstAttempt.isSuccess) {
-            return@withContext firstAttempt
+        // 1. If we have a cached working model, try it first
+        cachedWorkingModel?.let { cached ->
+            val result = tryModel(cachedApiVersion, cached, cleanKey, prompt, languageCode, conversationHistory)
+            if (result.isSuccess) {
+                return@withContext result
+            }
+            Log.w(TAG, "Cached model $cached failed, refreshing model discovery...")
+            cachedWorkingModel = null
         }
 
-        val err = firstAttempt.exceptionOrNull()
-        if (err is ApiException && (err.code == 404 || err.code == 400)) {
-            Log.w(TAG, "Primary model failed with ${err.code}, trying fallback model $FALLBACK_MODEL")
-            return@withContext tryModel(FALLBACK_MODEL, apiKey, prompt, languageCode, conversationHistory)
+        // 2. Discover available models from the user's API key
+        val discoveredModels = queryAvailableModels(cleanKey)
+        val candidateModels = if (discoveredModels.isNotEmpty()) {
+            discoveredModels
+        } else {
+            FALLBACK_CANDIDATES
         }
 
-        return@withContext firstAttempt
+        var lastError: Exception? = null
+
+        // 3. Try candidates across API versions
+        for (apiVersion in API_VERSIONS) {
+            for (model in candidateModels) {
+                Log.d(TAG, "Attempting Gemini request with $apiVersion/models/$model")
+                val attempt = tryModel(apiVersion, model, cleanKey, prompt, languageCode, conversationHistory)
+                if (attempt.isSuccess) {
+                    cachedWorkingModel = model
+                    cachedApiVersion = apiVersion
+                    Log.i(TAG, "Successfully connected to Gemini model: $apiVersion/models/$model")
+                    return@withContext attempt
+                }
+
+                val err = attempt.exceptionOrNull() as? Exception
+                lastError = err
+
+                // If auth error (403/400 invalid key), don't loop endlessly
+                if (err is ApiException && (err.code == 403 || (err.code == 400 && err.message?.contains("API_KEY_INVALID", true) == true))) {
+                    return@withContext attempt
+                }
+            }
+        }
+
+        return@withContext Result.failure(lastError ?: ApiException(500, "Unable to find an active Gemini model for this API key."))
     }
 
     suspend fun testConnection(apiKey: String): Result<String> = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) {
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("Please enter an API key to test."))
         }
-        try {
-            val result = tryModel(
-                model = PRIMARY_MODEL,
-                apiKey = apiKey,
-                prompt = "Respond with one word: 'Connected'.",
-                languageCode = "en",
-                conversationHistory = emptyList()
-            )
-            if (result.isSuccess) {
-                Result.success("Connection successful! Gemini API is responsive.")
-            } else {
-                val fallback = tryModel(
-                    model = FALLBACK_MODEL,
-                    apiKey = apiKey,
-                    prompt = "Respond with one word: 'Connected'.",
+
+        // Try discovery or candidates
+        val models = queryAvailableModels(cleanKey).ifEmpty { FALLBACK_CANDIDATES }
+
+        for (apiVersion in API_VERSIONS) {
+            for (model in models) {
+                val result = tryModel(
+                    apiVersion = apiVersion,
+                    model = model,
+                    apiKey = cleanKey,
+                    prompt = "Hello! Answer with one word: Connected.",
                     languageCode = "en",
                     conversationHistory = emptyList()
                 )
-                if (fallback.isSuccess) {
-                    Result.success("Connection successful via fallback model! Gemini API is responsive.")
-                } else {
-                    fallback
+                if (result.isSuccess) {
+                    cachedWorkingModel = model
+                    cachedApiVersion = apiVersion
+                    return@withContext Result.success("Connection successful! Connected to $model ($apiVersion).")
                 }
             }
+        }
+
+        Result.failure(ApiException(404, "Connection test failed: No supported Gemini models found for this key."))
+    }
+
+    private fun queryAvailableModels(apiKey: String): List<String> {
+        val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
+        val request = Request.Builder().url(url).get().build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return emptyList()
+                val body = response.body?.string() ?: return emptyList()
+                val json = JSONObject(body)
+                val modelsArray = json.optJSONArray("models") ?: return emptyList()
+
+                val supported = mutableListOf<String>()
+                for (i in 0 until modelsArray.length()) {
+                    val m = modelsArray.getJSONObject(i)
+                    val name = m.optString("name", "").removePrefix("models/")
+                    val methods = m.optJSONArray("supportedGenerationMethods")
+                    var canGenerate = false
+                    if (methods != null) {
+                        for (j in 0 until methods.length()) {
+                            if (methods.optString(j) == "generateContent") {
+                                canGenerate = true
+                                break
+                            }
+                        }
+                    }
+                    if (canGenerate && name.isNotBlank()) {
+                        supported.add(name)
+                    }
+                }
+
+                // Sort: flash models first, then 2.x, then others
+                supported.sortedWith(
+                    compareByDescending<String> { it.contains("2.5") || it.contains("2.0") }
+                        .thenByDescending { it.contains("flash") }
+                )
+            }
         } catch (e: Exception) {
-            Result.failure(mapException(e))
+            Log.w(TAG, "Failed to query available models: ${e.message}")
+            emptyList()
         }
     }
 
     private fun tryModel(
+        apiVersion: String,
         model: String,
         apiKey: String,
         prompt: String,
         languageCode: String,
         conversationHistory: List<Pair<String, String>>
     ): Result<String> {
-        val url = "$BASE_URL/$model:generateContent?key=$apiKey"
+        val cleanModel = model.removePrefix("models/")
+        val url = "https://generativelanguage.googleapis.com/$apiVersion/models/$cleanModel:generateContent?key=$apiKey"
+
         val languageInstruction = when (languageCode) {
             "bn" -> "You are Zara AI, a warm, intelligent personal voice assistant. Respond fluently and naturally in Bengali (বাংলা). Keep voice answers concise, clear, and engaging (2 to 4 sentences unless asked for details)."
             "hi" -> "You are Zara AI, a warm, intelligent personal voice assistant. Respond fluently and naturally in Hindi (हिन्दी). Keep voice answers concise and clear."
@@ -205,6 +291,7 @@ class GeminiApiClient {
             when {
                 code == 400 -> "Invalid request or API key: $message"
                 code == 403 -> "Invalid or restricted API key. Please check your Google AI Studio key."
+                code == 404 -> "Model not available ($code): $message"
                 code == 429 -> "Quota limit exceeded. Please wait a moment before trying again."
                 code in 500..599 -> "Gemini service temporarily unavailable ($code). Please try again later."
                 message.isNotBlank() -> message
@@ -213,6 +300,7 @@ class GeminiApiClient {
         } catch (e: Exception) {
             when (code) {
                 403 -> "Invalid API key. Please check your credentials."
+                404 -> "Model not found ($code)."
                 429 -> "API rate limit reached. Please wait a few moments."
                 else -> "HTTP $code: Server error occurred."
             }
